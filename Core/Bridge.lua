@@ -6,8 +6,9 @@
 	1. Talented successfully applies a template -> Talented:OnTemplateApplied()
 	   -> remember the template for the active talent group, load its linked profile.
 	2. Dual spec change (ACTIVE_TALENT_GROUP_CHANGED)
-	   -> use the last template applied to that group if its main tree still matches,
-	      otherwise fall back to the profile linked to the tree with the most points.
+	   -> compare the spent talents with every linked template and use the best match
+	      (at least 80%), otherwise the last template applied to that group if its main
+	      tree still matches, otherwise the profile linked to the tree with the most points.
 	3. Loading is delayed (the spellbook has to update first) and never happens in combat.
 
 	Stored in ActionBarSaverDB.bridge:
@@ -214,8 +215,94 @@ function Bridge:GetTemplateTree(name)
 end
 
 ---------------------------------------------------------------------------
+-- Talent comparison
+-- Specs with the same main tree (Ret PvE / Ret PvP / PREG, Feral cat / bear)
+-- are told apart by comparing every single talent point.
+---------------------------------------------------------------------------
+local MIN_MATCH = 0.8 -- at least 80% of your spent points must be in the template
+
+-- Points per talent of a talent group: talents[tab][index] = rank
+function Bridge:GetGroupTalents(group)
+	local talents = {}
+	for tab=1, GetNumTalentTabs() do
+		talents[tab] = {}
+		for index=1, (GetNumTalents(tab) or 0) do
+			talents[tab][index] = select(5, GetTalentInfo(tab, index, false, false, group)) or 0
+		end
+	end
+	return talents
+end
+
+-- Points per talent of a Talented template (or nil)
+function Bridge:GetTemplateTalents(name)
+	local template = self:GetTalentedTemplate(name)
+	if( not template ) then return nil end
+	local ok, copy = pcall(function()
+		local t = {}
+		Talented:CopyPackedTemplate(template, t)
+		return t
+	end)
+	return ok and copy or nil
+end
+
+-- How well do the spent talents match a template?
+-- Returns coverage (share of your spent points that are also in the template)
+-- and similarity (shared points / bigger of both totals, used as tie-breaker)
+function Bridge:CompareTalents(actual, template)
+	local matched, actualTotal, templateTotal = 0, 0, 0
+	for tab, talents in ipairs(actual) do
+		local ttab = template[tab] or {}
+		for index, rank in ipairs(talents) do
+			local trank = ttab[index] or 0
+			actualTotal = actualTotal + rank
+			templateTotal = templateTotal + trank
+			matched = matched + math.min(rank, trank)
+		end
+	end
+	if( actualTotal == 0 ) then return 0, 0 end
+	return matched / actualTotal, matched / math.max(actualTotal, templateTotal)
+end
+
+-- Best matching linked template for a talent group
+-- Returns templateName, coverage (or nil)
+function Bridge:FindBestTemplate(group)
+	local actual = self:GetGroupTalents(group)
+	local remembered = self.char.groupTemplate[group]
+	local bestName, bestCoverage, bestSimilarity
+
+	for templateName in pairs(self.db.templateLinks[self.class]) do
+		local talents = self:GetTemplateTalents(templateName)
+		if( talents ) then
+			local coverage, similarity = self:CompareTalents(actual, talents)
+			local better = false
+			if( not bestName or coverage > bestCoverage ) then
+				better = true
+			elseif( coverage == bestCoverage ) then
+				if( similarity > bestSimilarity ) then
+					better = true
+				elseif( similarity == bestSimilarity and bestName ~= remembered ) then
+					-- identical match (e.g. hybrid builds): the last applied template wins,
+					-- otherwise alphabetical order keeps the result stable
+					if( templateName == remembered or templateName < bestName ) then
+						better = true
+					end
+				end
+			end
+			if( better ) then
+				bestName, bestCoverage, bestSimilarity = templateName, coverage, similarity
+			end
+		end
+	end
+
+	if( bestName and bestCoverage >= MIN_MATCH ) then
+		return bestName, bestCoverage
+	end
+	return nil
+end
+
+---------------------------------------------------------------------------
 -- Which profile belongs to a talent group?
--- Returns: profile, reason ("template" | "tree"), templateName/tree
+-- Returns: profile, reason ("match" | "template" | "tree"), templateName/tree, coverage
 ---------------------------------------------------------------------------
 function Bridge:ResolveProfile(group)
 	group = group or GetActiveTalentGroup()
@@ -224,7 +311,13 @@ function Bridge:ResolveProfile(group)
 		return nil
 	end
 
-	-- 1. Last template applied to this group, if its main tree still matches
+	-- 1. Linked template that matches the spent talents best
+	local bestName, coverage = self:FindBestTemplate(group)
+	if( bestName ) then
+		return self:GetTemplateLink(bestName), "match", bestName, coverage
+	end
+
+	-- 2. Last template applied to this group, if its main tree still matches
 	local templateName = self.char.groupTemplate[group]
 	if( templateName ) then
 		local profile = self:GetTemplateLink(templateName)
@@ -233,7 +326,7 @@ function Bridge:ResolveProfile(group)
 		end
 	end
 
-	-- 2. Fallback by talent tree
+	-- 3. Fallback by talent tree
 	local profile = self:GetTreeLink(activeTree)
 	if( profile ) then
 		return profile, "tree", activeTree
@@ -301,21 +394,23 @@ end
 
 -- For the "Apply now" button in the window
 function Bridge:ApplyForActiveGroup()
-	local profile, reason, detail = self:ResolveProfile()
+	local profile, reason, detail, coverage = self:ResolveProfile()
 	if( not profile ) then
 		Print("No profile is linked to your active spec.")
 		return
 	end
 	if( InCombatLockdown() ) then
-		self:Queue(profile, self:DescribeReason(reason, detail))
+		self:Queue(profile, self:DescribeReason(reason, detail, coverage))
 		return
 	end
 	pending, pendingReason = profile, nil
 	self:RestoreNow()
 end
 
-function Bridge:DescribeReason(reason, detail)
-	if( reason == "template" ) then
+function Bridge:DescribeReason(reason, detail, coverage)
+	if( reason == "match" ) then
+		return string.format("template %s, %d%% match", tostring(detail), math.floor((coverage or 0) * 100 + 0.5))
+	elseif( reason == "template" ) then
 		return "template " .. tostring(detail)
 	elseif( reason == "tree" ) then
 		return "tree " .. tostring(self:GetTreeNames()[detail] or detail)
@@ -342,9 +437,9 @@ frame:SetScript("OnEvent", function(self, event, ...)
 		if( not readyTime or GetTime() < readyTime ) then return end
 		if( not oldGroup or newGroup == oldGroup ) then return end
 
-		local profile, reason, detail = Bridge:ResolveProfile(newGroup)
+		local profile, reason, detail, coverage = Bridge:ResolveProfile(newGroup)
 		if( profile ) then
-			Bridge:Queue(profile, Bridge:DescribeReason(reason, detail))
+			Bridge:Queue(profile, Bridge:DescribeReason(reason, detail, coverage))
 		end
 
 	elseif( event == "SPELLS_CHANGED" ) then
@@ -380,9 +475,9 @@ if( Talented ) then
 			Bridge:Queue(profile, "template " .. template.name)
 		else
 			-- No direct link: fall back to the talent tree
-			local fallback, reason, detail = Bridge:ResolveProfile(group)
+			local fallback, reason, detail, coverage = Bridge:ResolveProfile(group)
 			if( fallback ) then
-				Bridge:Queue(fallback, Bridge:DescribeReason(reason, detail))
+				Bridge:Queue(fallback, Bridge:DescribeReason(reason, detail, coverage))
 			end
 		end
 	end

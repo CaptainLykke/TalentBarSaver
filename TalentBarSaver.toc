@@ -2,7 +2,7 @@
 ## Title: TalentBarSaver
 ## Notes: Talent templates (Talented), action bar profiles (Action Bar Saver) and gear sets in one addon - bars and gear switch automatically with your spec.
 ## Author: CaptainLykke (based on Talented by Jerry/Kader and Action Bar Saver 2 by Shadowed)
-## Version: 0.3.0
+## Version: 0.4.0
 ## SavedVariables: TalentedDB, ActionBarSaverDB
 
 # Libraries (Ace3)

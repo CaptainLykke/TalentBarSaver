@@ -93,27 +93,58 @@ local function ProfileDropdownList()
 	return list
 end
 
-local function GearDropdown(parent, width, profile)
+---------------------------------------------------------------------------
+-- Small popup menus (gear set picker, profile actions)
+---------------------------------------------------------------------------
+local EMPTY_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+local menuFrame
+local Confirm -- defined below (dialogs)
+
+local function ShowMenu(items)
+	if( not menuFrame ) then
+		menuFrame = CreateFrame("Frame", "TalentBarSaverMenu", UIParent, "UIDropDownMenuTemplate")
+	end
+	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU")
+end
+
+local function ShowGearMenu(profile)
 	local GearSets = ABS.GearSets
 	local current = GearSets:GetLink(profile)
-	local list = {[NONE_KEY] = NONE_TEXT}
-	for _, set in ipairs(GearSets:GetSets()) do
-		list[set.name] = GearSets:IconText(set.icon) .. set.name
-	end
-	if( current and not list[current] ) then
-		list[current] = RED .. current .. " (not found)|r"
-	end
+	local items = {
+		{text = "Gear set for " .. profile, isTitle = true, notCheckable = true},
+		{text = "None", checked = current == nil, func = function()
+			GearSets:SetLink(profile, nil)
+			ABS:RefreshWindow()
+		end},
+	}
 
-	local w = AceGUI:Create("Dropdown")
-	w:SetList(list)
-	w:SetValue(current or NONE_KEY)
-	w:SetRelativeWidth(width)
-	w:SetCallback("OnValueChanged", function(_, _, key)
-		GearSets:SetLink(profile, key ~= NONE_KEY and key or nil)
-		ABS:RefreshWindow()
-	end)
-	parent:AddChild(w)
-	return w
+	local sets = GearSets:GetSets()
+	for _, set in ipairs(sets) do
+		local setName = set.name
+		table.insert(items, {
+			text = GearSets:IconText(set.icon) .. setName,
+			checked = current == setName,
+			func = function()
+				GearSets:SetLink(profile, setName)
+				ABS:RefreshWindow()
+			end,
+		})
+	end
+	if( #sets == 0 ) then
+		table.insert(items, {text = GREY .. "No sets in the Equipment Manager yet|r", disabled = true, notCheckable = true})
+	end
+	table.insert(items, {text = "Cancel", notCheckable = true, func = function() CloseDropDownMenus() end})
+	ShowMenu(items)
+end
+
+local function ShowProfileMenu(profile)
+	ShowMenu({
+		{text = profile, isTitle = true, notCheckable = true},
+		{text = "Save current bars", notCheckable = true, func = function() Confirm("TALENTBARSAVER_OVERWRITE", profile) end},
+		{text = "Rename", notCheckable = true, func = function() Confirm("TALENTBARSAVER_RENAME", profile) end},
+		{text = "Delete", notCheckable = true, func = function() Confirm("TALENTBARSAVER_DELETE", profile) end},
+		{text = "Cancel", notCheckable = true, func = function() CloseDropDownMenus() end},
+	})
 end
 
 local function ProfileDropdown(parent, width, value, onChange)
@@ -137,8 +168,8 @@ end
 
 StaticPopupDialogs["TALENTBARSAVER_DELETE"] = {
 	text = "Delete profile %s?",
-	button1 = YES,
-	button2 = NO,
+	button1 = "Yes",
+	button2 = "No",
 	OnAccept = function(self, data) ABS:DeleteProfile(data) end,
 	timeout = 0,
 	whileDead = 1,
@@ -147,8 +178,8 @@ StaticPopupDialogs["TALENTBARSAVER_DELETE"] = {
 
 StaticPopupDialogs["TALENTBARSAVER_OVERWRITE"] = {
 	text = "Save your current action bars to profile %s?\nThe layout stored in this profile will be overwritten.",
-	button1 = YES,
-	button2 = NO,
+	button1 = "Yes",
+	button2 = "No",
 	OnAccept = function(self, data) ABS:SaveProfile(data) end,
 	timeout = 0,
 	whileDead = 1,
@@ -162,8 +193,8 @@ end
 
 StaticPopupDialogs["TALENTBARSAVER_RENAME"] = {
 	text = "New name for profile %s:",
-	button1 = ACCEPT,
-	button2 = CANCEL,
+	button1 = "Accept",
+	button2 = "Cancel",
 	hasEditBox = 1,
 	maxLetters = 64,
 	OnShow = function(self)
@@ -181,7 +212,7 @@ StaticPopupDialogs["TALENTBARSAVER_RENAME"] = {
 	hideOnEscape = 1,
 }
 
-local function Confirm(which, profile)
+function Confirm(which, profile)
 	local dialog = StaticPopup_Show(which, YELLOW .. profile .. "|r")
 	if( dialog ) then
 		dialog.data = profile
@@ -234,42 +265,46 @@ local function BuildProfiles(scroll)
 	end
 
 	local active = Bridge:GetLastProfile()
-	local hasSets = #ABS.GearSets:GetSets() > 0
+	local GearSets = ABS.GearSets
 	for _, name in ipairs(profiles) do
 		local row = Row(scroll)
-		local text = ProfileText(name)
-		if( name == active ) then
-			text = ABS.GearSets:IconText(ABS.GearSets:GetProfileIcon(name)) .. GREEN .. name .. "|r " .. GREY .. "(loaded)|r"
-		end
-		Label(row, text, 0.26, GameFontHighlight)
 
-		local load = Button(row, "Load", 0.18, function()
+		-- Gear set icon: click to choose a set
+		local setName = GearSets:GetLink(name)
+		local iconPath = GearSets:GetProfileIcon(name)
+		local icon = AceGUI:Create("Icon")
+		icon:SetImage(iconPath or EMPTY_ICON)
+		icon:SetImageSize(24, 24)
+		icon:SetLabel(nil)
+		icon:SetRelativeWidth(0.08)
+		icon:SetCallback("OnClick", function() ShowGearMenu(name) end)
+		if( setName and not iconPath ) then
+			AddTooltip(icon, "Gear set not found", "The linked set " .. setName .. " no longer exists. Click to choose another one.")
+		elseif( setName ) then
+			AddTooltip(icon, "Gear set: " .. setName, "Equipped whenever this profile is loaded. Click to change.")
+		else
+			AddTooltip(icon, "No gear set", "Click to link a gear set from the Equipment Manager.")
+		end
+		row:AddChild(icon)
+
+		local text = (name == active) and (GREEN .. name .. "|r  " .. GREY .. "(loaded)|r") or name
+		if( setName and not iconPath ) then
+			text = text .. "  " .. RED .. "(gear set missing)|r"
+		end
+		Label(row, text, 0.50, GameFontHighlight)
+
+		local load = Button(row, "Load", 0.22, function()
 			ABS:RestoreProfile(name)
 		end)
-		AddTooltip(load, "Load", "Switches your action bars to this profile.")
+		AddTooltip(load, "Load", "Switches your action bars to this profile" .. (setName and " and equips its gear set." or "."))
 
-		local save = Button(row, "Save", 0.18, function()
-			Confirm("TALENTBARSAVER_OVERWRITE", name)
+		local more = Button(row, "...", 0.14, function()
+			ShowProfileMenu(name)
 		end)
-		AddTooltip(save, "Save", "Overwrites this profile with your current action bars.")
-
-		Button(row, "Rename", 0.18, function()
-			Confirm("TALENTBARSAVER_RENAME", name)
-		end)
-
-		Button(row, "Delete", 0.18, function()
-			Confirm("TALENTBARSAVER_DELETE", name)
-		end)
-
-		-- Gear set link
-		local gearRow = Row(scroll)
-		Label(gearRow, GREY .. "   Gear set:|r", 0.26)
-		if( hasSets or ABS.GearSets:GetLink(name) ) then
-			GearDropdown(gearRow, 0.54, name)
-		else
-			Label(gearRow, GREY .. "No sets in the Equipment Manager yet.|r", 0.7)
-		end
+		AddTooltip(more, "More", "Save current bars, rename or delete this profile.")
 	end
+	Spacer(scroll)
+	Label(scroll, GREY .. "Click an icon to link a gear set. Use ... to save, rename or delete a profile.|r")
 end
 
 ---------------------------------------------------------------------------
@@ -291,9 +326,9 @@ local function StatusText()
 	local templateName = Bridge:GetGroupTemplate(group)
 	table.insert(parts, "Last applied template: " .. (templateName and (YELLOW .. templateName .. "|r") or (GREY .. "-|r")))
 
-	local profile, reason, detail = Bridge:ResolveProfile(group)
+	local profile, reason, detail, coverage = Bridge:ResolveProfile(group)
 	if( profile ) then
-		table.insert(parts, string.format("Matching profile: %s%s%s|r %s(%s)|r", ABS.GearSets:IconText(ABS.GearSets:GetProfileIcon(profile)), GREEN, profile, GREY, Bridge:DescribeReason(reason, detail)))
+		table.insert(parts, string.format("Matching profile: %s%s%s|r %s(%s)|r", ABS.GearSets:IconText(ABS.GearSets:GetProfileIcon(profile)), GREEN, profile, GREY, Bridge:DescribeReason(reason, detail, coverage)))
 	else
 		table.insert(parts, "Matching profile: " .. GREY .. "none linked|r")
 	end
@@ -414,7 +449,7 @@ local function BuildHelp(scroll)
 	Step(scroll, 3, "Link templates to profiles",
 		"Open the Links tab and pick a profile for every template. Optional: pick a fallback profile for each talent tree. It is used when no linked template matches your spec, e.g. when you spent your talents by hand.")
 	Step(scroll, 4, "Optional: link a gear set",
-		"Create gear sets in the Equipment Manager (character window). In the Profiles tab, pick a gear set below each profile. It is equipped whenever that profile is loaded, and its icon is shown next to the profile and on the minimap button.")
+		"Create gear sets in the Equipment Manager (character window). In the Profiles tab, click the icon in front of a profile and pick a gear set. It is equipped whenever that profile is loaded, and its icon is shown next to the profile and on the minimap button.")
 	Step(scroll, 5, "Switch your spec",
 		"In Talented, open a template and choose Actions > Apply template, or switch your dual spec. About one second later your action bars (and gear) change to the linked profile.")
 
@@ -422,8 +457,9 @@ local function BuildHelp(scroll)
 	Label(scroll, table.concat({
 		"- Nothing is loaded or equipped in combat. The switch happens right after combat ends.",
 		"- Missing gear items, or items that are only in your bank, are listed in chat. Everything else is equipped anyway.",
+		"- Specs with the same main tree (e.g. Ret PvE, Ret PvP, PREG or Feral cat and bear) are told apart by comparing every talent point with your templates.",
 		"- Apply now (Links tab) loads the matching profile immediately.",
-		"- Save next to a profile overwrites it with your current bars.",
+		"- The ... button next to a profile lets you save your current bars into it, rename it or delete it.",
 		"- Disable automatic switching in Options if you only want to load profiles by hand.",
 		"- Something missing on your bars? Options > Show errors in chat lists what could not be restored.",
 	}, "\n"), nil, GameFontHighlight)

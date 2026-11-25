@@ -9,17 +9,19 @@ This is useful for classes that play more than two specs. For example, a Paladin
 ## Features
 
 - **Template → profile:** link every Talented template to an action bar profile.
+- **Smart spec detection:** your spent talents are compared point by point with every linked template, so specs with the same main tree (Ret PvE / Ret PvP / PREG, Feral cat / bear) are told apart.
 - **Automatic switching:**
   - after Talented has successfully applied a template
-  - on a dual spec change, using the last template applied to that talent group, as long as its main tree still matches
+  - on a dual spec change, using the linked template that matches your talents best (at least 80%)
 - **Fallback per talent tree:** if no linked template matches, the profile linked to the tree with the most points is loaded.
+- **Simple profile list:** one line per profile with gear set icon, Load and a small menu for save, rename and delete.
 - **Gear sets:** link an Equipment Manager set to a profile. It is equipped whenever the profile is loaded.
   - Missing items, and items that are only in the bank, are listed in chat. Everything that is available is equipped anyway.
   - The set icon is shown next to the profile and on the minimap button.
 - **Combat safe:** no bars are restored and no gear is equipped in combat. A pending switch runs once combat ends.
 - **Waits for new spells:** restoring is delayed until the spellbook has updated, so talent spells (e.g. Divine Storm) end up on the bars.
 - **Profile window** (`/tbs`) with four tabs:
-  - **Profiles:** save, load, rename and delete profiles, link gear sets
+  - **Profiles:** save, load, rename and delete profiles; click a profile's icon to link a gear set
   - **Links:** link templates and talent trees to profiles
   - **Options:** automatic switching, gear sets, minimap button, macros, spell rank
   - **Help:** a short in-game how-to, shown the first time you open the window
@@ -62,7 +64,7 @@ Get-Content .\Talented.lua, .\ActionBarSaver.lua | Set-Content .\TalentBarSaver.
 2. In Talented (key `N`), create the templates "Ret PvE", "Holy PvE" and "Prot PvE".
 3. Open `/tbs`, go to **Links**, and pick a profile for each template.
 4. Optional: set a fallback profile for each talent tree.
-5. Optional: create gear sets in the Equipment Manager and pick one below each profile in the **Profiles** tab.
+5. Optional: create gear sets in the Equipment Manager. In the **Profiles** tab, click the icon in front of a profile and pick a set.
 
 From then on, apply a template in Talented or switch your dual spec, and your bars and gear follow.
 
