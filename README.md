@@ -15,10 +15,12 @@ This is useful for classes that play more than two specs. For example, a Paladin
 - **Fallback per talent tree:** if no linked template matches, the profile linked to the tree with the most points is loaded.
 - **Combat safe:** nothing is restored in combat. A pending switch runs once combat ends.
 - **Waits for new spells:** restoring is delayed until the spellbook has updated, so talent spells (e.g. Divine Storm) end up on the bars.
-- **Profile window** (`/tbs`) with three tabs:
-  - save, load, rename and delete profiles
-  - manage the links
-  - options
+- **Profile window** (`/tbs`) with four tabs:
+  - **Profiles:** save, load, rename and delete profiles
+  - **Links:** link templates and talent trees to profiles
+  - **Options:** automatic switching, minimap button, macros, spell rank
+  - **Help:** a short in-game how-to, shown the first time you open the window
+- **Minimap button:** left-click opens the window, right-click opens Talented, drag to move. It can be turned off under Options or with `/tbs minimap`.
 - **All original commands** still work: `/abs save`, `/abs restore`, `/abs list`, …
 
 ## Installation
@@ -47,6 +49,7 @@ Get-Content .\Talented.lua, .\ActionBarSaver.lua | Set-Content .\TalentBarSaver.
 | `/tbs restore <name>` | Load a profile |
 | `/tbs list` | List all profiles |
 | `/tbs errors` | Show buttons that could not be restored last time |
+| `/tbs minimap` | Show or hide the minimap button |
 | `/tbs help` | Show all commands |
 | `/talented` | Talented options |
 
@@ -54,12 +57,10 @@ Get-Content .\Talented.lua, .\ActionBarSaver.lua | Set-Content .\TalentBarSaver.
 
 1. Arrange your bars for Retribution and save them as `ret-pve`. Do the same for Holy and Protection.
 2. In Talented (key `N`), create the templates "Ret PvE", "Holy PvE" and "Prot PvE".
-3. Open `/tbs`, go to **Zuordnung** (Links), and pick a profile for each template.
+3. Open `/tbs`, go to **Links**, and pick a profile for each template.
 4. Optional: set a fallback profile for each talent tree.
 
 From then on, apply a template in Talented or switch your dual spec, and the bars follow.
-
-> The new UI texts are currently in German. The original Talented and ActionBarSaver messages are unchanged.
 
 ## Project structure
 
@@ -72,10 +73,11 @@ TalentBarSaver/
 ├── ABS/                   Action Bar Saver 2 source (bug fixes + profile API)
 └── Core/
     ├── Bridge.lua         Template / spec → profile logic
-    └── LayoutUI.lua       Profile window (AceGUI-3.0)
+    ├── LayoutUI.lua       Profile window (AceGUI-3.0)
+    └── MinimapButton.lua  Minimap button
 ```
 
-New features go into `Core/`. Add new files to the `.toc` below `# Eigene Erweiterungen`.
+New features go into `Core/`. Add new files to the `.toc` below `# TalentBarSaver modules`.
 
 ### Changes to the original addons
 
@@ -99,7 +101,7 @@ New features go into `Core/`. Add new files to the `.toc` below `# Eigene Erweit
 |---|---|
 | `TalentedDB` | Talent templates and Talented options |
 | `ActionBarSaverDB` | Action bar profiles and options |
-| `ActionBarSaverDB.bridge` | Template/tree links, last applied template per character and talent group, window position |
+| `ActionBarSaverDB.bridge` | Template/tree links, last applied template per character and talent group, window position, minimap button settings |
 
 ## Compatibility
 

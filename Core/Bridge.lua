@@ -1,21 +1,22 @@
 --[[
 	TalentBarSaver - Bridge
-	Verbindet Talented-Templates mit ActionBarSaver-Profilen.
+	Connects Talented templates with ActionBarSaver profiles.
 
-	Ablauf:
-	1. Talented wendet ein Template erfolgreich an -> Talented:OnTemplateApplied()
-	   -> Template fuer die aktive Talentgruppe merken, zugeordnetes Profil laden.
-	2. Dual-Spec-Wechsel (ACTIVE_TALENT_GROUP_CHANGED)
-	   -> zuletzt angewendetes Template dieser Gruppe nehmen, sofern der Hauptbaum noch passt,
-	      sonst Fallback: Profil des Talentbaums mit den meisten Punkten.
-	3. Geladen wird verzoegert (Zauberbuch muss erst aktualisiert sein) und nie im Kampf.
+	Flow:
+	1. Talented successfully applies a template -> Talented:OnTemplateApplied()
+	   -> remember the template for the active talent group, load its linked profile.
+	2. Dual spec change (ACTIVE_TALENT_GROUP_CHANGED)
+	   -> use the last template applied to that group if its main tree still matches,
+	      otherwise fall back to the profile linked to the tree with the most points.
+	3. Loading is delayed (the spellbook has to update first) and never happens in combat.
 
-	Gespeichert in ActionBarSaverDB.bridge:
+	Stored in ActionBarSaverDB.bridge:
 	  auto            = true/false
-	  templateLinks   = { [KLASSE] = { [Templatename] = profil } }
-	  treeLinks       = { [KLASSE] = { [1] = profil, [2] = profil, [3] = profil } }
-	  chars           = { ["Name-Realm"] = { groupTemplate = { [1] = Templatename, [2] = ... }, lastProfile = profil } }
-	  ui              = Fensterposition/-groesse
+	  templateLinks   = { [CLASS] = { [templateName] = profile } }
+	  treeLinks       = { [CLASS] = { [1] = profile, [2] = profile, [3] = profile } }
+	  chars           = { ["Name-Realm"] = { groupTemplate = { [1] = templateName, [2] = ... }, lastProfile = profile } }
+	  ui              = window position/size, help seen flag
+	  minimap         = { hide = false, angle = 225 }
 ]]
 local ADDON_NAME, ns = ...
 local ABS = ns
@@ -24,9 +25,9 @@ local Talented = _G.Talented
 local Bridge = {}
 ABS.Bridge = Bridge
 
-local INITIAL_DELAY = 1.0     -- Sekunden nach Template/Spec-Wechsel
-local SPELLS_DELAY = 0.5      -- Mindestwartezeit nach dem letzten SPELLS_CHANGED
-local LOGIN_GRACE = 5         -- Sekunden nach dem Einloggen, in denen Spec-Events ignoriert werden
+local INITIAL_DELAY = 1.0     -- seconds after a template/spec change
+local SPELLS_DELAY = 0.5      -- minimum wait after the last SPELLS_CHANGED
+local LOGIN_GRACE = 5         -- seconds after login during which spec events are ignored
 
 local frame = CreateFrame("Frame")
 Bridge.frame = frame
@@ -44,7 +45,7 @@ local function CharKey()
 end
 
 ---------------------------------------------------------------------------
--- Datenbank
+-- Database
 ---------------------------------------------------------------------------
 local function InitDB()
 	local db = ABS.db
@@ -55,6 +56,9 @@ local function InitDB()
 	b.treeLinks = b.treeLinks or {}
 	b.chars = b.chars or {}
 	b.ui = b.ui or {}
+	b.minimap = b.minimap or {}
+	if( b.minimap.hide == nil ) then b.minimap.hide = false end
+	b.minimap.angle = b.minimap.angle or 225
 
 	local class = ABS.playerClass
 	b.templateLinks[class] = b.templateLinks[class] or {}
@@ -70,7 +74,7 @@ local function InitDB()
 	Bridge.class = class
 end
 
--- Wird von ABS:OnInitialize() aufgerufen (ADDON_LOADED)
+-- Called from ABS:OnInitialize() (ADDON_LOADED)
 function ABS:OnDatabaseReady()
 	InitDB()
 
@@ -78,6 +82,10 @@ function ABS:OnDatabaseReady()
 	frame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
 	frame:RegisterEvent("SPELLS_CHANGED")
 	frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+
+	if( ABS.OnBridgeReady ) then
+		ABS:OnBridgeReady()
+	end
 end
 
 local function Refresh()
@@ -87,7 +95,7 @@ local function Refresh()
 end
 
 ---------------------------------------------------------------------------
--- Zuordnungen
+-- Links
 ---------------------------------------------------------------------------
 function Bridge:IsAuto()
 	return self.db and self.db.auto
@@ -124,19 +132,19 @@ function Bridge:GetGroupTemplate(group)
 end
 
 ---------------------------------------------------------------------------
--- Talente auslesen
+-- Reading talents
 ---------------------------------------------------------------------------
 
--- Namen der drei Talentbaeume der eigenen Klasse
+-- Names of the three talent trees of the player class
 function Bridge:GetTreeNames()
 	local names = {}
 	for tab=1, GetNumTalentTabs() do
-		names[tab] = (GetTalentTabInfo(tab)) or ("Baum " .. tab)
+		names[tab] = (GetTalentTabInfo(tab)) or ("Tree " .. tab)
 	end
 	return names
 end
 
--- Baum mit den meisten Punkten in einer Talentgruppe (nil, wenn keine Punkte verteilt)
+-- Tree with the most points in a talent group (nil if no points spent)
 function Bridge:GetActiveTree(group)
 	group = group or GetActiveTalentGroup()
 	local best, bestPoints = nil, 0
@@ -150,7 +158,7 @@ function Bridge:GetActiveTree(group)
 	return best, bestPoints
 end
 
--- Talented-Template-Objekt (oder nil)
+-- Talented template object (or nil)
 function Bridge:GetTalentedTemplate(name)
 	local tdb = Talented and Talented.db
 	local templates = tdb and tdb.global and tdb.global.templates
@@ -161,7 +169,7 @@ function Bridge:GetTalentedTemplate(name)
 	return nil
 end
 
--- Sortierte Namen aller Talented-Templates der eigenen Klasse
+-- Sorted names of all Talented templates of the player class
 function Bridge:GetClassTemplates()
 	local list = {}
 	local tdb = Talented and Talented.db
@@ -177,7 +185,7 @@ function Bridge:GetClassTemplates()
 	return list
 end
 
--- Hauptbaum eines Talented-Templates
+-- Main tree of a Talented template
 function Bridge:GetTemplateTree(name)
 	local template = self:GetTalentedTemplate(name)
 	if( not template ) then return nil end
@@ -202,8 +210,8 @@ function Bridge:GetTemplateTree(name)
 end
 
 ---------------------------------------------------------------------------
--- Welches Profil gehoert zur Talentgruppe?
--- Rueckgabe: profil, grund ("template" | "tree"), templateName/baum
+-- Which profile belongs to a talent group?
+-- Returns: profile, reason ("template" | "tree"), templateName/tree
 ---------------------------------------------------------------------------
 function Bridge:ResolveProfile(group)
 	group = group or GetActiveTalentGroup()
@@ -212,7 +220,7 @@ function Bridge:ResolveProfile(group)
 		return nil
 	end
 
-	-- 1. Zuletzt angewendetes Template dieser Gruppe, wenn der Hauptbaum noch stimmt
+	-- 1. Last template applied to this group, if its main tree still matches
 	local templateName = self.char.groupTemplate[group]
 	if( templateName ) then
 		local profile = self:GetTemplateLink(templateName)
@@ -221,7 +229,7 @@ function Bridge:ResolveProfile(group)
 		end
 	end
 
-	-- 2. Fallback nach Talentbaum
+	-- 2. Fallback by talent tree
 	local profile = self:GetTreeLink(activeTree)
 	if( profile ) then
 		return profile, "tree", activeTree
@@ -231,7 +239,7 @@ function Bridge:ResolveProfile(group)
 end
 
 ---------------------------------------------------------------------------
--- Verzoegertes Laden
+-- Delayed loading
 ---------------------------------------------------------------------------
 local function OnUpdate(self, elapsed)
 	timer = timer - elapsed
@@ -243,7 +251,7 @@ local function OnUpdate(self, elapsed)
 	if( InCombatLockdown() ) then
 		if( not waitingForCombat ) then
 			waitingForCombat = true
-			Print(string.format("Im Kampf - lade |cffffff00%s|r nach dem Kampf.", pending))
+			Print(string.format("In combat - |cffffff00%s|r will be loaded after combat.", pending))
 		end
 		return
 	end
@@ -258,7 +266,7 @@ local function StartTimer(seconds)
 	frame:SetScript("OnUpdate", OnUpdate)
 end
 
--- Profil zum Laden vormerken
+-- Queue a profile for loading
 function Bridge:Queue(profile, reason)
 	if( not profile ) then return end
 	pending = profile
@@ -274,21 +282,21 @@ function Bridge:RestoreNow()
 	if( not profile ) then return end
 
 	if( not ABS:ProfileExists(profile) ) then
-		Print(string.format("Profil |cffffff00%s|r ist zugeordnet, existiert aber nicht (mehr).", profile))
+		Print(string.format("Profile |cffffff00%s|r is linked but does not exist (anymore).", profile))
 		return
 	end
 
 	if( reason ) then
-		Print(string.format("Spec erkannt (%s) - lade Profil |cffffff00%s|r.", reason, profile))
+		Print(string.format("Spec detected (%s) - loading profile |cffffff00%s|r.", reason, profile))
 	end
 	ABS:RestoreProfile(profile)
 end
 
--- Fuer den Button "Jetzt anwenden" im Fenster
+-- For the "Apply now" button in the window
 function Bridge:ApplyForActiveGroup()
 	local profile, reason, detail = self:ResolveProfile()
 	if( not profile ) then
-		Print("Fuer den aktiven Spec ist kein Profil zugeordnet.")
+		Print("No profile is linked to your active spec.")
 		return
 	end
 	if( InCombatLockdown() ) then
@@ -301,9 +309,9 @@ end
 
 function Bridge:DescribeReason(reason, detail)
 	if( reason == "template" ) then
-		return "Template " .. tostring(detail)
+		return "template " .. tostring(detail)
 	elseif( reason == "tree" ) then
-		return "Baum " .. tostring(self:GetTreeNames()[detail] or detail)
+		return "tree " .. tostring(self:GetTreeNames()[detail] or detail)
 	end
 	return "?"
 end
@@ -333,7 +341,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
 		end
 
 	elseif( event == "SPELLS_CHANGED" ) then
-		-- Zauberbuch hat sich geaendert: noch kurz warten, damit neue Talentzauber da sind
+		-- Spellbook changed: wait a little longer so new talent spells are available
 		if( pending and timer ) then
 			StartTimer(SPELLS_DELAY)
 		end
@@ -346,13 +354,13 @@ frame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 ---------------------------------------------------------------------------
--- Hooks aus Talented (siehe Talented\Talented.lua)
+-- Hooks called from Talented (see Talented\Talented.lua)
 ---------------------------------------------------------------------------
 if( Talented ) then
-	-- Template wurde erfolgreich angewendet
+	-- A template was applied successfully
 	function Talented:OnTemplateApplied(template)
 		if( not Bridge.db or not template or not template.name ) then return end
-		if( template.talentGroup ) then return end -- aktive Specs selbst, kein gespeichertes Template
+		if( template.talentGroup ) then return end -- the active specs themselves, not a saved template
 
 		local group = GetActiveTalentGroup()
 		Bridge.char.groupTemplate[group] = template.name
@@ -362,9 +370,9 @@ if( Talented ) then
 
 		local profile = Bridge:GetTemplateLink(template.name)
 		if( profile ) then
-			Bridge:Queue(profile, "Template " .. template.name)
+			Bridge:Queue(profile, "template " .. template.name)
 		else
-			-- Kein direkter Link: Fallback nach Baum
+			-- No direct link: fall back to the talent tree
 			local fallback, reason, detail = Bridge:ResolveProfile(group)
 			if( fallback ) then
 				Bridge:Queue(fallback, Bridge:DescribeReason(reason, detail))
@@ -372,7 +380,7 @@ if( Talented ) then
 		end
 	end
 
-	-- Template wurde in Talented umbenannt
+	-- A template was renamed in Talented
 	function Talented:OnTemplateRenamed(oldName, newName, class)
 		if( not Bridge.db ) then return end
 		local links = Bridge.db.templateLinks[class]
@@ -392,7 +400,7 @@ if( Talented ) then
 end
 
 ---------------------------------------------------------------------------
--- Hooks aus ActionBarSaver
+-- Hooks called from ActionBarSaver
 ---------------------------------------------------------------------------
 function ABS:OnProfileRestored(name)
 	if( Bridge.char ) then

@@ -117,7 +117,7 @@ do
 		local t = self.db.global.templates
 		t[newname] = template
 		t[oldname] = nil
-		-- TalentBarSaver: Zuordnung Template -> Profil mitnehmen
+		-- TalentBarSaver: keep the template -> profile link
 		if self.OnTemplateRenamed then
 			self:OnTemplateRenamed(oldname, newname, template.class)
 		end
@@ -2143,7 +2143,7 @@ do
 			local cp = GetUnspentTalentPoints(nil, pet, group)
 			Talented:Print(L["Template applied successfully, %d talent points remaining."], cp)
 
-			-- TalentBarSaver: Hook fuer Core\Bridge.lua (ersetzt die alte "Restore bars with ABS"-Option)
+			-- TalentBarSaver: hook for Core\Bridge.lua (replaces the old "Restore bars with ABS" option)
 			if not pet and self.OnTemplateApplied then
 				self:OnTemplateApplied(template)
 			end

@@ -1,11 +1,11 @@
 --[[
 	Action Bar Saver, Shadowed
-	Angepasst fuer TalentBarSaver:
-	- laeuft im gemeinsamen Addon-Ordner (Name kommt aus "...")
-	- Fehler behoben: String.format, falsche Variable in Meldungen, Fehlerliste wurde nicht geleert,
-	  Item-Name bei Fehlermeldung, fehlende Pruefung bei leeren Zauberbuch-Tabs
-	- Profil-Funktionen (Liste, Loeschen, Umbenennen) als API fuer Core\LayoutUI.lua
-	- /tbs als zusaetzlicher Slash-Befehl, ohne Argument oeffnet sich das Fenster
+	Modified for TalentBarSaver:
+	- runs inside the combined addon folder (name comes from "...")
+	- fixed: String.format typo, wrong variable in messages, error list not cleared,
+	  item name in error message, missing check for empty spellbook tabs
+	- profile functions (list, delete, rename) as API for Core\LayoutUI.lua
+	- /tbs as additional slash command, without arguments it opens the window
 ]]
 local ADDON_NAME, ns = ...
 ActionBarSaver = ns
@@ -13,7 +13,7 @@ ActionBarSaver = ns
 local ABS = ActionBarSaver
 local L = ABS.locals
 
--- Fehlende Uebersetzungen nicht als Lua-Fehler enden lassen
+-- Missing translations must not end in a Lua error
 setmetatable(L, {__index = function(t, key) return key end})
 
 local restoreErrors, spellCache, macroCache, macroNameCache = {}, {}, {}, {}
@@ -55,13 +55,13 @@ function ABS:OnInitialize()
 	playerClass = select(2, UnitClass("player"))
 	self.playerClass = playerClass
 
-	-- Andere Module (Bridge, UI) informieren
+	-- Notify other modules (Bridge, UI)
 	if( self.OnDatabaseReady ) then
 		self:OnDatabaseReady()
 	end
 end
 
--- Profilnamen immer gleich behandeln (Slash-Befehle haben schon immer klein geschrieben)
+-- Normalize profile names (slash commands always used lower case)
 function ABS:NormalizeName(name)
 	return string.lower(string.trim(name or ""))
 end
@@ -83,10 +83,10 @@ function ABS:UncompressText(text)
 end
 
 ---------------------------------------------------------------------------
--- Profil-API (wird von Slash-Befehlen und vom Fenster genutzt)
+-- Profile API (used by slash commands and the window)
 ---------------------------------------------------------------------------
 
--- Sortierte Liste der Profile der eigenen Klasse
+-- Sorted list of the profiles of the player class
 function ABS:GetProfileList()
 	local list = {}
 	for name in pairs(self.db.sets[playerClass]) do
@@ -284,7 +284,7 @@ function ABS:RestoreMacros(set)
 	CacheMacros()
 end
 
--- Restore a saved profile. Gibt true zurueck, wenn geladen wurde.
+-- Restore a saved profile. Returns true if it was loaded.
 function ABS:RestoreProfile(name, overrideClass)
 	name = self:NormalizeName(name)
 	local set = self.db.sets[overrideClass or playerClass][name]
@@ -462,11 +462,11 @@ function ABS:Print(msg)
 end
 
 ---------------------------------------------------------------------------
--- Slash-Befehle: /tbs, /abs, /actionbarsaver
+-- Slash commands: /tbs, /abs, /actionbarsaver
 ---------------------------------------------------------------------------
 local function PrintHelp(self)
 	self:Print(L["Slash commands"])
-	DEFAULT_CHAT_FRAME:AddMessage("/tbs - Oeffnet das TalentBarSaver-Fenster")
+	DEFAULT_CHAT_FRAME:AddMessage("/tbs - Opens the TalentBarSaver window (/tbs minimap toggles the minimap button)")
 	DEFAULT_CHAT_FRAME:AddMessage(L["/abs save <profile> - Saves your current action bar setup under the given profile."])
 	DEFAULT_CHAT_FRAME:AddMessage(L["/abs restore <profile> - Changes your action bars to the passed profile."])
 	DEFAULT_CHAT_FRAME:AddMessage(L["/abs delete <profile> - Deletes the saved profile."])
@@ -494,7 +494,7 @@ SlashCmdList["TALENTBARSAVER"] = function(msg)
 
 	local self = ABS
 
-	-- Fenster
+	-- Window
 	if( cmd == "" or cmd == "ui" or cmd == "show" ) then
 		if( self.ToggleWindow ) then
 			self:ToggleWindow()
@@ -603,6 +603,12 @@ SlashCmdList["TALENTBARSAVER"] = function(msg)
 			self:Print(L["Auto restoring highest spell rank is now disabled!"])
 		end
 		self:ProfilesChanged()
+
+	-- Minimap button
+	elseif( cmd == "minimap" ) then
+		if( self.ToggleMinimapButton ) then
+			self:ToggleMinimapButton()
+		end
 
 	-- Halp
 	else
