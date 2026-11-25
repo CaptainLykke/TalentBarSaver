@@ -1,5 +1,6 @@
 --[[
 	TalentBarSaver - Minimap button
+	Shows the icon of the gear set linked to the loaded profile (default icon otherwise).
 	Left-click:  open/close the TalentBarSaver window
 	Right-click: open Talented
 	Drag:        move the button around the minimap
@@ -14,7 +15,7 @@ local Bridge = ABS.Bridge
 local ICON = "Interface\\Icons\\Ability_DualWield"
 local RADIUS = 80
 
-local button
+local button, iconTexture
 
 local function Settings()
 	return Bridge.db.minimap
@@ -42,6 +43,11 @@ local function OnEnter(self)
 	local last = Bridge:GetLastProfile()
 	if( last ) then
 		GameTooltip:AddLine("Loaded profile: |cff33ff33" .. last .. "|r")
+		local GearSets = ABS.GearSets
+		local setName = GearSets and GearSets:GetLink(last)
+		if( setName ) then
+			GameTooltip:AddLine("Gear set: " .. GearSets:IconText(GearSets:GetSetIcon(setName), 14) .. "|cff33ff33" .. setName .. "|r")
+		end
 	end
 	GameTooltip:AddLine("|cffffff00Left-click|r to open the window", 0.8, 0.8, 0.8)
 	GameTooltip:AddLine("|cffffff00Right-click|r to open Talented", 0.8, 0.8, 0.8)
@@ -85,12 +91,11 @@ local function CreateButton()
 	background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
 	background:SetPoint("TOPLEFT", 7, -5)
 
-	local icon = button:CreateTexture(nil, "ARTWORK")
-	icon:SetWidth(17)
-	icon:SetHeight(17)
-	icon:SetTexture(ICON)
-	icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-	icon:SetPoint("TOPLEFT", 7, -6)
+	iconTexture = button:CreateTexture(nil, "ARTWORK")
+	iconTexture:SetWidth(17)
+	iconTexture:SetHeight(17)
+	iconTexture:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+	iconTexture:SetPoint("TOPLEFT", 7, -6)
 
 	button:SetScript("OnEnter", OnEnter)
 	button:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -106,12 +111,22 @@ local function CreateButton()
 	end)
 
 	UpdatePosition()
+	ABS:UpdateMinimapIcon()
 	return button
 end
 
 ---------------------------------------------------------------------------
 -- API
 ---------------------------------------------------------------------------
+
+-- Icon of the gear set linked to the loaded profile, default icon otherwise
+function ABS:UpdateMinimapIcon()
+	if( not iconTexture ) then return end
+	local GearSets = self.GearSets
+	local last = Bridge:GetLastProfile()
+	local icon = GearSets and last and GearSets:GetProfileIcon(last)
+	iconTexture:SetTexture(icon or ICON)
+end
 function ABS:IsMinimapButtonShown()
 	return not Settings().hide
 end

@@ -17,6 +17,7 @@
 	  chars           = { ["Name-Realm"] = { groupTemplate = { [1] = templateName, [2] = ... }, lastProfile = profile } }
 	  ui              = window position/size, help seen flag
 	  minimap         = { hide = false, angle = 225 }
+	  gearLinks, equipOnManualLoad -> see Core\GearSets.lua
 ]]
 local ADDON_NAME, ns = ...
 local ABS = ns
@@ -83,6 +84,9 @@ function ABS:OnDatabaseReady()
 	frame:RegisterEvent("SPELLS_CHANGED")
 	frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
+	if( ABS.GearSets ) then
+		ABS.GearSets:InitDB()
+	end
 	if( ABS.OnBridgeReady ) then
 		ABS:OnBridgeReady()
 	end
@@ -289,7 +293,10 @@ function Bridge:RestoreNow()
 	if( reason ) then
 		Print(string.format("Spec detected (%s) - loading profile |cffffff00%s|r.", reason, profile))
 	end
+	-- automatic = triggered by a template or spec change (has a reason), not by "Apply now"
+	Bridge.restoringAutomatic = reason ~= nil
 	ABS:RestoreProfile(profile)
+	Bridge.restoringAutomatic = false
 end
 
 -- For the "Apply now" button in the window
@@ -406,11 +413,18 @@ function ABS:OnProfileRestored(name)
 	if( Bridge.char ) then
 		Bridge.char.lastProfile = name
 	end
+	if( ABS.GearSets ) then
+		ABS.GearSets:OnProfileLoaded(name, Bridge.restoringAutomatic)
+	end
+	if( ABS.UpdateMinimapIcon ) then
+		ABS:UpdateMinimapIcon()
+	end
 	Refresh()
 end
 
 function ABS:OnProfileRenamed(old, new)
 	local b = Bridge.db
+	if( ABS.GearSets ) then ABS.GearSets:OnProfileRenamed(old, new) end
 	for template, profile in pairs(b.templateLinks[Bridge.class]) do
 		if( profile == old ) then b.templateLinks[Bridge.class][template] = new end
 	end
@@ -424,6 +438,7 @@ end
 
 function ABS:OnProfileDeleted(name)
 	local b = Bridge.db
+	if( ABS.GearSets ) then ABS.GearSets:OnProfileDeleted(name) end
 	for template, profile in pairs(b.templateLinks[Bridge.class]) do
 		if( profile == name ) then b.templateLinks[Bridge.class][template] = nil end
 	end

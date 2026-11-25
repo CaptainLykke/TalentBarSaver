@@ -1,8 +1,8 @@
 # TalentBarSaver
 
-A World of Warcraft addon for **Wrath of the Lich King 3.3.5a** that combines talent templates and action bar profiles in one place.
+A World of Warcraft addon for **Wrath of the Lich King 3.3.5a** that combines talent templates, action bar profiles and gear sets in one place.
 
-It merges [Talented](https://www.curseforge.com/wow/addons/talented) (talent template editor) and [Action Bar Saver 2](https://github.com/Shadowed/ActionBarSaver) (action bar profiles), and connects them. Assign an action bar profile to each talent template, and your bars switch automatically when you apply a template or change your dual spec.
+It merges [Talented](https://www.curseforge.com/wow/addons/talented) (talent template editor) and [Action Bar Saver 2](https://github.com/Shadowed/ActionBarSaver) (action bar profiles), and connects them. Assign an action bar profile to each talent template, and your bars switch automatically when you apply a template or change your dual spec. Each profile can also equip a gear set from the Equipment Manager.
 
 This is useful for classes that play more than two specs. For example, a Paladin who switches between Retribution, Holy and Protection no longer has to type `/abs restore …` after every respec.
 
@@ -13,12 +13,15 @@ This is useful for classes that play more than two specs. For example, a Paladin
   - after Talented has successfully applied a template
   - on a dual spec change, using the last template applied to that talent group, as long as its main tree still matches
 - **Fallback per talent tree:** if no linked template matches, the profile linked to the tree with the most points is loaded.
-- **Combat safe:** nothing is restored in combat. A pending switch runs once combat ends.
+- **Gear sets:** link an Equipment Manager set to a profile. It is equipped whenever the profile is loaded.
+  - Missing items, and items that are only in the bank, are listed in chat. Everything that is available is equipped anyway.
+  - The set icon is shown next to the profile and on the minimap button.
+- **Combat safe:** no bars are restored and no gear is equipped in combat. A pending switch runs once combat ends.
 - **Waits for new spells:** restoring is delayed until the spellbook has updated, so talent spells (e.g. Divine Storm) end up on the bars.
 - **Profile window** (`/tbs`) with four tabs:
-  - **Profiles:** save, load, rename and delete profiles
+  - **Profiles:** save, load, rename and delete profiles, link gear sets
   - **Links:** link templates and talent trees to profiles
-  - **Options:** automatic switching, minimap button, macros, spell rank
+  - **Options:** automatic switching, gear sets, minimap button, macros, spell rank
   - **Help:** a short in-game how-to, shown the first time you open the window
 - **Minimap button:** left-click opens the window, right-click opens Talented, drag to move. It can be turned off under Options or with `/tbs minimap`.
 - **All original commands** still work: `/abs save`, `/abs restore`, `/abs list`, …
@@ -59,8 +62,9 @@ Get-Content .\Talented.lua, .\ActionBarSaver.lua | Set-Content .\TalentBarSaver.
 2. In Talented (key `N`), create the templates "Ret PvE", "Holy PvE" and "Prot PvE".
 3. Open `/tbs`, go to **Links**, and pick a profile for each template.
 4. Optional: set a fallback profile for each talent tree.
+5. Optional: create gear sets in the Equipment Manager and pick one below each profile in the **Profiles** tab.
 
-From then on, apply a template in Talented or switch your dual spec, and the bars follow.
+From then on, apply a template in Talented or switch your dual spec, and your bars and gear follow.
 
 ## Project structure
 
@@ -73,6 +77,7 @@ TalentBarSaver/
 ├── ABS/                   Action Bar Saver 2 source (bug fixes + profile API)
 └── Core/
     ├── Bridge.lua         Template / spec → profile logic
+    ├── GearSets.lua       Profile → Equipment Manager set
     ├── LayoutUI.lua       Profile window (AceGUI-3.0)
     └── MinimapButton.lua  Minimap button
 ```
@@ -101,7 +106,7 @@ New features go into `Core/`. Add new files to the `.toc` below `# TalentBarSave
 |---|---|
 | `TalentedDB` | Talent templates and Talented options |
 | `ActionBarSaverDB` | Action bar profiles and options |
-| `ActionBarSaverDB.bridge` | Template/tree links, last applied template per character and talent group, window position, minimap button settings |
+| `ActionBarSaverDB.bridge` | Template/tree links, gear set links, last applied template per character and talent group, window position, minimap button settings |
 
 ## Compatibility
 

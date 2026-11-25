@@ -3,9 +3,9 @@
 	/tbs (or /abs without arguments) opens the window.
 
 	Tabs:
-	  Profiles - save, load, rename and delete action bar profiles
+	  Profiles - save, load, rename and delete action bar profiles, link gear sets
 	  Links    - Talented template -> profile, fallback per talent tree
-	  Options  - automatic switching, minimap button, macros, spell rank
+	  Options  - automatic switching, gear sets, minimap button, macros, spell rank
 	  Help     - short how-to (opened automatically the first time)
 ]]
 local ADDON_NAME, ns = ...
@@ -21,6 +21,16 @@ local NONE_TEXT = "|cff808080- none -|r"
 local GREEN = "|cff33ff33"
 local YELLOW = "|cffffff00"
 local GREY = "|cff9d9d9d"
+local RED = "|cffff4040"
+
+-- "<gear set icon> name" for a profile
+local function ProfileText(name)
+	local GearSets = ABS.GearSets
+	if( GearSets ) then
+		return GearSets:IconText(GearSets:GetProfileIcon(name)) .. name
+	end
+	return name
+end
 
 ---------------------------------------------------------------------------
 -- Helpers
@@ -78,9 +88,32 @@ end
 local function ProfileDropdownList()
 	local list = {[NONE_KEY] = NONE_TEXT}
 	for _, name in ipairs(ABS:GetProfileList()) do
-		list[name] = name
+		list[name] = ProfileText(name)
 	end
 	return list
+end
+
+local function GearDropdown(parent, width, profile)
+	local GearSets = ABS.GearSets
+	local current = GearSets:GetLink(profile)
+	local list = {[NONE_KEY] = NONE_TEXT}
+	for _, set in ipairs(GearSets:GetSets()) do
+		list[set.name] = GearSets:IconText(set.icon) .. set.name
+	end
+	if( current and not list[current] ) then
+		list[current] = RED .. current .. " (not found)|r"
+	end
+
+	local w = AceGUI:Create("Dropdown")
+	w:SetList(list)
+	w:SetValue(current or NONE_KEY)
+	w:SetRelativeWidth(width)
+	w:SetCallback("OnValueChanged", function(_, _, key)
+		GearSets:SetLink(profile, key ~= NONE_KEY and key or nil)
+		ABS:RefreshWindow()
+	end)
+	parent:AddChild(w)
+	return w
 end
 
 local function ProfileDropdown(parent, width, value, onChange)
@@ -201,11 +234,12 @@ local function BuildProfiles(scroll)
 	end
 
 	local active = Bridge:GetLastProfile()
+	local hasSets = #ABS.GearSets:GetSets() > 0
 	for _, name in ipairs(profiles) do
 		local row = Row(scroll)
-		local text = name
+		local text = ProfileText(name)
 		if( name == active ) then
-			text = GREEN .. name .. "|r " .. GREY .. "(loaded)|r"
+			text = ABS.GearSets:IconText(ABS.GearSets:GetProfileIcon(name)) .. GREEN .. name .. "|r " .. GREY .. "(loaded)|r"
 		end
 		Label(row, text, 0.26, GameFontHighlight)
 
@@ -226,6 +260,15 @@ local function BuildProfiles(scroll)
 		Button(row, "Delete", 0.18, function()
 			Confirm("TALENTBARSAVER_DELETE", name)
 		end)
+
+		-- Gear set link
+		local gearRow = Row(scroll)
+		Label(gearRow, GREY .. "   Gear set:|r", 0.26)
+		if( hasSets or ABS.GearSets:GetLink(name) ) then
+			GearDropdown(gearRow, 0.54, name)
+		else
+			Label(gearRow, GREY .. "No sets in the Equipment Manager yet.|r", 0.7)
+		end
 	end
 end
 
@@ -250,7 +293,7 @@ local function StatusText()
 
 	local profile, reason, detail = Bridge:ResolveProfile(group)
 	if( profile ) then
-		table.insert(parts, string.format("Matching profile: %s%s|r %s(%s)|r", GREEN, profile, GREY, Bridge:DescribeReason(reason, detail)))
+		table.insert(parts, string.format("Matching profile: %s%s%s|r %s(%s)|r", ABS.GearSets:IconText(ABS.GearSets:GetProfileIcon(profile)), GREEN, profile, GREY, Bridge:DescribeReason(reason, detail)))
 	else
 		table.insert(parts, "Matching profile: " .. GREY .. "none linked|r")
 	end
@@ -326,6 +369,10 @@ local function BuildOptions(scroll)
 		"Load the linked profile after applying a Talented template and when switching your dual spec.",
 		Bridge:IsAuto(), function(v) Bridge:SetAuto(v) end)
 
+	CheckBox(scroll, "Equip gear set on manual load",
+		"Also equip the linked gear set when you load a profile by hand (Load, Apply now, /tbs restore). Automatic switches always equip it.",
+		ABS.GearSets:IsEquipOnManualLoad(), function(v) ABS.GearSets:SetEquipOnManualLoad(v) end)
+
 	CheckBox(scroll, "Show minimap button",
 		"Left-click opens this window, right-click opens Talented. Can also be toggled with /tbs minimap.",
 		ABS:IsMinimapButtonShown(), function(v) ABS:SetMinimapButtonShown(v) end)
@@ -356,22 +403,25 @@ end
 
 local function BuildHelp(scroll)
 	Heading(scroll, "What does TalentBarSaver do?")
-	Label(scroll, "TalentBarSaver stores your action bar layouts as profiles and loads the right one automatically when your talents change: after applying a Talented template or when you switch your dual spec.", nil, GameFontHighlight)
+	Label(scroll, "TalentBarSaver stores your action bar layouts as profiles and loads the right one automatically when your talents change: after applying a Talented template or when you switch your dual spec. Each profile can also equip a gear set from the Equipment Manager.", nil, GameFontHighlight)
 	Spacer(scroll)
 
-	Heading(scroll, "Setup in 4 steps")
+	Heading(scroll, "Setup in 5 steps")
 	Step(scroll, 1, "Save a profile for each spec",
 		"Arrange your action bars for one spec. Open the Profiles tab, enter a name (e.g. ret-pve) and click Save. Repeat this for every spec you play.")
 	Step(scroll, 2, "Create a talent template for each spec",
 		"Press N to open Talented. Use Actions > New Template, spend the points and give the template a name (e.g. Ret PvE).")
 	Step(scroll, 3, "Link templates to profiles",
 		"Open the Links tab and pick a profile for every template. Optional: pick a fallback profile for each talent tree. It is used when no linked template matches your spec, e.g. when you spent your talents by hand.")
-	Step(scroll, 4, "Switch your spec",
-		"In Talented, open a template and choose Actions > Apply template, or switch your dual spec. About one second later your action bars change to the linked profile.")
+	Step(scroll, 4, "Optional: link a gear set",
+		"Create gear sets in the Equipment Manager (character window). In the Profiles tab, pick a gear set below each profile. It is equipped whenever that profile is loaded, and its icon is shown next to the profile and on the minimap button.")
+	Step(scroll, 5, "Switch your spec",
+		"In Talented, open a template and choose Actions > Apply template, or switch your dual spec. About one second later your action bars (and gear) change to the linked profile.")
 
 	Heading(scroll, "Good to know")
 	Label(scroll, table.concat({
-		"- Nothing is loaded in combat. The switch happens right after combat ends.",
+		"- Nothing is loaded or equipped in combat. The switch happens right after combat ends.",
+		"- Missing gear items, or items that are only in your bank, are listed in chat. Everything else is equipped anyway.",
 		"- Apply now (Links tab) loads the matching profile immediately.",
 		"- Save next to a profile overwrites it with your current bars.",
 		"- Disable automatic switching in Options if you only want to load profiles by hand.",
