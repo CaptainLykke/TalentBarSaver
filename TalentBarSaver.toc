@@ -1,0 +1,26 @@
+## Interface: 30300
+## Title: TalentBarSaver
+## Notes: Talent-Templates (Talented) und Aktionsleisten-Profile (ActionBarSaver) in einem Addon - Leisten wechseln automatisch mit dem Spec.
+## Author: Till (basiert auf Talented von Jerry/Kader und Action Bar Saver 2 von Shadowed)
+## Version: 0.1.0
+## SavedVariables: TalentedDB, ActionBarSaverDB
+
+# Bibliotheken (Ace3)
+Libs\Libs.xml
+
+# Talented
+Locales\Locales.xml
+Talented\Talented.lua
+Talented\Options.lua
+Talented\Data.lua
+Talented\Exporters.lua
+Talented\Ui.lua
+Talented\Glyphs.lua
+
+# ActionBarSaver
+ABS\localization.enUS.lua
+ABS\ActionBarSaver.lua
+
+# Eigene Erweiterungen
+Core\Bridge.lua
+Core\LayoutUI.lua

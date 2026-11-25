@@ -1,0 +1,115 @@
+# TalentBarSaver
+
+A World of Warcraft addon for **Wrath of the Lich King 3.3.5a** that combines talent templates and action bar profiles in one place.
+
+It merges [Talented](https://www.curseforge.com/wow/addons/talented) (talent template editor) and [Action Bar Saver 2](https://github.com/Shadowed/ActionBarSaver) (action bar profiles), and connects them. Assign an action bar profile to each talent template, and your bars switch automatically when you apply a template or change your dual spec.
+
+This is useful for classes that play more than two specs. For example, a Paladin who switches between Retribution, Holy and Protection no longer has to type `/abs restore …` after every respec.
+
+## Features
+
+- **Template → profile:** link every Talented template to an action bar profile.
+- **Automatic switching:**
+  - after Talented has successfully applied a template
+  - on a dual spec change, using the last template applied to that talent group, as long as its main tree still matches
+- **Fallback per talent tree:** if no linked template matches, the profile linked to the tree with the most points is loaded.
+- **Combat safe:** nothing is restored in combat. A pending switch runs once combat ends.
+- **Waits for new spells:** restoring is delayed until the spellbook has updated, so talent spells (e.g. Divine Storm) end up on the bars.
+- **Profile window** (`/tbs`) with three tabs:
+  - save, load, rename and delete profiles
+  - manage the links
+  - options
+- **All original commands** still work: `/abs save`, `/abs restore`, `/abs list`, …
+
+## Installation
+
+1. Close WoW.
+2. Copy the `TalentBarSaver` folder to `<WoW>\Interface\AddOns\`.
+3. Remove the standalone `Talented` and `ActionBarSaver` folders from `Interface\AddOns`. Running them alongside TalentBarSaver causes Lua errors.
+4. Start WoW and type `/tbs`.
+
+### Migrating existing templates and profiles
+
+WoW stores saved variables per addon folder. TalentBarSaver uses the same variable names as the original addons (`TalentedDB`, `ActionBarSaverDB`), so you only need to merge the two old files once.
+
+With WoW closed, run this in `<WoW>\WTF\Account\<ACCOUNT>\SavedVariables\`:
+
+```powershell
+Get-Content .\Talented.lua, .\ActionBarSaver.lua | Set-Content .\TalentBarSaver.lua
+```
+
+## Usage
+
+| Command | Description |
+|---|---|
+| `/tbs` | Open or close the window (`/abs` without arguments works too) |
+| `/tbs save <name>` | Save the current action bars as a profile |
+| `/tbs restore <name>` | Load a profile |
+| `/tbs list` | List all profiles |
+| `/tbs errors` | Show buttons that could not be restored last time |
+| `/tbs help` | Show all commands |
+| `/talented` | Talented options |
+
+**Typical setup**
+
+1. Arrange your bars for Retribution and save them as `ret-pve`. Do the same for Holy and Protection.
+2. In Talented (key `N`), create the templates "Ret PvE", "Holy PvE" and "Prot PvE".
+3. Open `/tbs`, go to **Zuordnung** (Links), and pick a profile for each template.
+4. Optional: set a fallback profile for each talent tree.
+
+From then on, apply a template in Talented or switch your dual spec, and the bars follow.
+
+> The new UI texts are currently in German. The original Talented and ActionBarSaver messages are unchanged.
+
+## Project structure
+
+```
+TalentBarSaver/
+├── TalentBarSaver.toc     Load order
+├── Libs/                  Ace3 libraries (from Talented)
+├── Locales/               Talented translations
+├── Talented/              Talented source (two small hooks added)
+├── ABS/                   Action Bar Saver 2 source (bug fixes + profile API)
+└── Core/
+    ├── Bridge.lua         Template / spec → profile logic
+    └── LayoutUI.lua       Profile window (AceGUI-3.0)
+```
+
+New features go into `Core/`. Add new files to the `.toc` below `# Eigene Erweiterungen`.
+
+### Changes to the original addons
+
+**Talented**
+- Texture paths point to `Interface\AddOns\TalentBarSaver\Talented\Textures\`
+- The "Restore bars with ABS" option is removed. It never worked, because it looked for a global `ABS`.
+- Hooks `Talented:OnTemplateApplied(template)` and `Talented:OnTemplateRenamed(old, new, class)`
+
+**Action Bar Saver 2**
+- Fixed: `String.format` typo, which caused a Lua error when restoring in combat
+- Fixed: wrong variable in error messages
+- Fixed: the error list was not cleared between restores
+- Fixed: the item name was missing from error messages
+- Fixed: empty spellbook tabs were not handled
+- Profile API: `GetProfileList`, `ProfileExists`, `DeleteProfile`, `RenameProfile`
+- `/tbs` slash command
+
+### Saved variables
+
+| Variable | Content |
+|---|---|
+| `TalentedDB` | Talent templates and Talented options |
+| `ActionBarSaverDB` | Action bar profiles and options |
+| `ActionBarSaverDB.bridge` | Template/tree links, last applied template per character and talent group, window position |
+
+## Compatibility
+
+- WoW client **3.3.5a** (Interface 30300)
+- Replaces the standalone Talented and Action Bar Saver 2 addons. Do not run them at the same time.
+
+## Credits
+
+- **Talented** by Jerry, Kader Edition
+- **Action Bar Saver 2** by Shadowed
+- Ace3 libraries by the Ace3 team
+
+All credit for the original addons goes to their authors. TalentBarSaver adds the integration layer and the profile window.
