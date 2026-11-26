@@ -27,6 +27,28 @@ local Talented = _G.Talented
 local Bridge = {}
 ABS.Bridge = Bridge
 
+---------------------------------------------------------------------------
+-- Modules (GearSets, ChangeTracker, Keybinds, Glyphs) register here and get:
+--   module:InitDB()                        database is ready
+--   module:OnProfileLoaded(name, isAuto)   a profile was restored
+--   module:OnProfileSaved(name)            current bars were saved into a profile
+--   module:OnProfileRenamed(old, new)
+--   module:OnProfileDeleted(name)
+---------------------------------------------------------------------------
+ABS.Modules = ABS.Modules or {}
+
+function ABS:RegisterModule(module)
+	table.insert(self.Modules, module)
+end
+
+local function CallModules(method, ...)
+	for _, module in ipairs(ABS.Modules) do
+		if( module[method] ) then
+			module[method](module, ...)
+		end
+	end
+end
+
 local INITIAL_DELAY = 1.0     -- seconds after a template/spec change
 local SPELLS_DELAY = 0.5      -- minimum wait after the last SPELLS_CHANGED
 local LOGIN_GRACE = 5         -- seconds after login during which spec events are ignored
@@ -85,9 +107,7 @@ function ABS:OnDatabaseReady()
 	frame:RegisterEvent("SPELLS_CHANGED")
 	frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
-	if( ABS.GearSets ) then
-		ABS.GearSets:InitDB()
-	end
+	CallModules("InitDB")
 	if( ABS.OnBridgeReady ) then
 		ABS:OnBridgeReady()
 	end
@@ -508,18 +528,27 @@ function ABS:OnProfileRestored(name)
 	if( Bridge.char ) then
 		Bridge.char.lastProfile = name
 	end
-	if( ABS.GearSets ) then
-		ABS.GearSets:OnProfileLoaded(name, Bridge.restoringAutomatic)
-	end
+	CallModules("OnProfileLoaded", name, Bridge.restoringAutomatic)
 	if( ABS.UpdateMinimapIcon ) then
 		ABS:UpdateMinimapIcon()
 	end
 	Refresh()
 end
 
+-- Current bars were saved into a profile: that profile now matches the bars
+function ABS:OnProfileSaved(name)
+	if( Bridge.char ) then
+		Bridge.char.lastProfile = name
+	end
+	CallModules("OnProfileSaved", name)
+	if( ABS.UpdateMinimapIcon ) then
+		ABS:UpdateMinimapIcon()
+	end
+end
+
 function ABS:OnProfileRenamed(old, new)
 	local b = Bridge.db
-	if( ABS.GearSets ) then ABS.GearSets:OnProfileRenamed(old, new) end
+	CallModules("OnProfileRenamed", old, new)
 	for template, profile in pairs(b.templateLinks[Bridge.class]) do
 		if( profile == old ) then b.templateLinks[Bridge.class][template] = new end
 	end
@@ -533,7 +562,7 @@ end
 
 function ABS:OnProfileDeleted(name)
 	local b = Bridge.db
-	if( ABS.GearSets ) then ABS.GearSets:OnProfileDeleted(name) end
+	CallModules("OnProfileDeleted", name)
 	for template, profile in pairs(b.templateLinks[Bridge.class]) do
 		if( profile == name ) then b.templateLinks[Bridge.class][template] = nil end
 	end

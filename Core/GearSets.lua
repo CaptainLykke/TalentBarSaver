@@ -20,6 +20,7 @@ local Bridge = ABS.Bridge
 
 local GearSets = {}
 ABS.GearSets = GearSets
+ABS:RegisterModule(GearSets)
 
 local YELLOW = "|cffffff00"
 local RED = "|cffff4040"

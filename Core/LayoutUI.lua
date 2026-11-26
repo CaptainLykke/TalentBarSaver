@@ -22,6 +22,7 @@ local GREEN = "|cff33ff33"
 local YELLOW = "|cffffff00"
 local GREY = "|cff9d9d9d"
 local RED = "|cffff4040"
+local ORANGE = "|cffff9900"
 
 -- "<gear set icon> name" for a profile
 local function ProfileText(name)
@@ -141,6 +142,7 @@ local function ShowProfileMenu(profile)
 	ShowMenu({
 		{text = profile, isTitle = true, notCheckable = true},
 		{text = "Save current bars", notCheckable = true, func = function() Confirm("TALENTBARSAVER_OVERWRITE", profile) end},
+		{text = "Save key bindings with this profile", checked = ABS.Keybinds:IsEnabled(profile), func = function() ABS.Keybinds:Toggle(profile) end},
 		{text = "Rename", notCheckable = true, func = function() Confirm("TALENTBARSAVER_RENAME", profile) end},
 		{text = "Delete", notCheckable = true, func = function() Confirm("TALENTBARSAVER_DELETE", profile) end},
 		{text = "Cancel", notCheckable = true, func = function() CloseDropDownMenus() end},
@@ -256,6 +258,15 @@ local function BuildProfiles(scroll)
 	end)
 	AddTooltip(saveButton, "Save", "Saves your current action bars under the name you entered, e.g. ret-pve.")
 
+	-- Unsaved changes
+	local loaded = Bridge:GetLastProfile()
+	if( ABS:HasUnsavedChanges() ) then
+		local notice = Row(scroll)
+		Label(notice, ORANGE .. "Your bars changed since " .. loaded .. " was loaded.|r", 0.62, GameFontHighlight)
+		local saveChanges = Button(notice, "Save changes", 0.36, function() ABS:SaveChanges() end)
+		AddTooltip(saveChanges, "Save changes", "Saves your current action bars into " .. loaded .. ".")
+	end
+
 	Heading(scroll, "Profiles (" .. (UnitClass("player")) .. ")")
 
 	local profiles = ABS:GetProfileList()
@@ -287,7 +298,17 @@ local function BuildProfiles(scroll)
 		end
 		row:AddChild(icon)
 
-		local text = (name == active) and (GREEN .. name .. "|r  " .. GREY .. "(loaded)|r") or name
+		local text = name
+		if( name == active ) then
+			if( ABS:HasUnsavedChanges() ) then
+				text = GREEN .. name .. "|r  " .. ORANGE .. "(changed)|r"
+			else
+				text = GREEN .. name .. "|r  " .. GREY .. "(loaded)|r"
+			end
+		end
+		if( ABS.Keybinds:IsEnabled(name) ) then
+			text = text .. "  " .. GREY .. "[keys]|r"
+		end
 		if( setName and not iconPath ) then
 			text = text .. "  " .. RED .. "(gear set missing)|r"
 		end
@@ -304,7 +325,7 @@ local function BuildProfiles(scroll)
 		AddTooltip(more, "More", "Save current bars, rename or delete this profile.")
 	end
 	Spacer(scroll)
-	Label(scroll, GREY .. "Click an icon to link a gear set. Use ... to save, rename or delete a profile.|r")
+	Label(scroll, GREY .. "Click an icon to link a gear set. Use ... to save, rename or delete a profile, or to save your key bindings with it.|r")
 end
 
 ---------------------------------------------------------------------------
@@ -408,8 +429,12 @@ local function BuildOptions(scroll)
 		"Also equip the linked gear set when you load a profile by hand (Load, Apply now, /tbs restore). Automatic switches always equip it.",
 		ABS.GearSets:IsEquipOnManualLoad(), function(v) ABS.GearSets:SetEquipOnManualLoad(v) end)
 
+	CheckBox(scroll, "Check glyphs when loading a profile",
+		"Tells you in chat when your glyphs do not match the ones saved with the profile. Nothing is changed automatically.",
+		ABS.Glyphs:IsEnabled(), function(v) ABS.Glyphs:SetEnabled(v) end)
+
 	CheckBox(scroll, "Show minimap button",
-		"Left-click opens this window, right-click opens Talented. Can also be toggled with /tbs minimap.",
+		"Left-click opens this window, shift-click opens the quick menu, right-click opens Talented. Can also be toggled with /tbs minimap.",
 		ABS:IsMinimapButtonShown(), function(v) ABS:SetMinimapButtonShown(v) end)
 
 	CheckBox(scroll, "Recreate missing macros",
@@ -459,7 +484,11 @@ local function BuildHelp(scroll)
 		"- Missing gear items, or items that are only in your bank, are listed in chat. Everything else is equipped anyway.",
 		"- Specs with the same main tree (e.g. Ret PvE, Ret PvP, PREG or Feral cat and bear) are told apart by comparing every talent point with your templates.",
 		"- Apply now (Links tab) loads the matching profile immediately.",
-		"- The ... button next to a profile lets you save your current bars into it, rename it or delete it.",
+		"- The ... button next to a profile lets you save your current bars into it, rename it, delete it or save your key bindings with it.",
+		"- Shift-click the minimap button for a quick menu: load any profile with one click.",
+		"- Changed your bars after loading a profile? It shows (changed), a dot appears on the minimap button and you can save with one click.",
+		"- Glyphs are saved with a profile. If they do not match after loading it, you get a hint in chat.",
+		"- Key bindings loaded by mistake? /tbs undobinds brings back your previous ones.",
 		"- Disable automatic switching in Options if you only want to load profiles by hand.",
 		"- Something missing on your bars? Options > Show errors in chat lists what could not be restored.",
 	}, "\n"), nil, GameFontHighlight)
@@ -472,6 +501,7 @@ local function BuildHelp(scroll)
 		"/tbs restore <name> - load a profile",
 		"/tbs list - list all profiles",
 		"/tbs minimap - show or hide the minimap button",
+		"/tbs undobinds - restore the key bindings from before the last profile load",
 		"/tbs help - all commands (/abs works the same way)",
 		"/talented - Talented options",
 	}, "\n"), nil, GameFontHighlight)

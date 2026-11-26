@@ -466,7 +466,7 @@ end
 ---------------------------------------------------------------------------
 local function PrintHelp(self)
 	self:Print(L["Slash commands"])
-	DEFAULT_CHAT_FRAME:AddMessage("/tbs - Opens the TalentBarSaver window (/tbs minimap toggles the minimap button)")
+	DEFAULT_CHAT_FRAME:AddMessage("/tbs - Opens the TalentBarSaver window (/tbs minimap toggles the minimap button, /tbs undobinds restores your previous key bindings)")
 	DEFAULT_CHAT_FRAME:AddMessage(L["/abs save <profile> - Saves your current action bar setup under the given profile."])
 	DEFAULT_CHAT_FRAME:AddMessage(L["/abs restore <profile> - Changes your action bars to the passed profile."])
 	DEFAULT_CHAT_FRAME:AddMessage(L["/abs delete <profile> - Deletes the saved profile."])
@@ -603,6 +603,12 @@ SlashCmdList["TALENTBARSAVER"] = function(msg)
 			self:Print(L["Auto restoring highest spell rank is now disabled!"])
 		end
 		self:ProfilesChanged()
+
+	-- Undo key bindings
+	elseif( cmd == "undobinds" ) then
+		if( self.Keybinds ) then
+			self.Keybinds:Undo()
+		end
 
 	-- Minimap button
 	elseif( cmd == "minimap" ) then

@@ -4,6 +4,8 @@ A World of Warcraft addon for **Wrath of the Lich King 3.3.5a** that combines ta
 
 It merges [Talented](https://www.curseforge.com/wow/addons/talented) (talent template editor) and [Action Bar Saver 2](https://github.com/Shadowed/ActionBarSaver) (action bar profiles), and connects them. Assign an action bar profile to each talent template, and your bars switch automatically when you apply a template or change your dual spec. Each profile can also equip a gear set from the Equipment Manager.
 
+**Current version:** 0.5.0. See the [changelog](CHANGELOG.md) for what changed in each version.
+
 This is useful for classes that play more than two specs. For example, a Paladin who switches between Retribution, Holy and Protection no longer has to type `/abs restore …` after every respec.
 
 ## Features
@@ -23,9 +25,13 @@ This is useful for classes that play more than two specs. For example, a Paladin
 - **Profile window** (`/tbs`) with four tabs:
   - **Profiles:** save, load, rename and delete profiles; click a profile's icon to link a gear set
   - **Links:** link templates and talent trees to profiles
-  - **Options:** automatic switching, gear sets, minimap button, macros, spell rank
+  - **Options:** automatic switching, gear sets, glyph check, minimap button, macros, spell rank
   - **Help:** a short in-game how-to, shown the first time you open the window
 - **Minimap button:** left-click opens the window, right-click opens Talented, drag to move. It can be turned off under Options or with `/tbs minimap`.
+- **Quick menu:** shift-click the minimap button to load any profile with one click.
+- **Unsaved changes hint:** if you change your bars after loading a profile, the profile shows *(changed)*, a dot appears on the minimap button, and you can save with one click.
+- **Key bindings per profile (optional):** turn it on in a profile's `...` menu. Your key bindings are then saved and loaded with that profile. `/tbs undobinds` brings back the previous ones.
+- **Glyph reminder:** glyphs are saved with a profile. If they do not match after loading it, you get a hint in chat. Nothing is changed automatically.
 - **All original commands** still work: `/abs save`, `/abs restore`, `/abs list`, …
 
 ## Installation
@@ -55,6 +61,7 @@ Get-Content .\Talented.lua, .\ActionBarSaver.lua | Set-Content .\TalentBarSaver.
 | `/tbs list` | List all profiles |
 | `/tbs errors` | Show buttons that could not be restored last time |
 | `/tbs minimap` | Show or hide the minimap button |
+| `/tbs undobinds` | Restore the key bindings from before the last profile load |
 | `/tbs help` | Show all commands |
 | `/talented` | Talented options |
 
@@ -73,6 +80,7 @@ From then on, apply a template in Talented or switch your dual spec, and your ba
 ```
 TalentBarSaver/
 ├── TalentBarSaver.toc     Load order
+├── CHANGELOG.md           Version history
 ├── Libs/                  Ace3 libraries (from Talented)
 ├── Locales/               Talented translations
 ├── Talented/              Talented source (two small hooks added)
@@ -80,6 +88,9 @@ TalentBarSaver/
 └── Core/
     ├── Bridge.lua         Template / spec → profile logic
     ├── GearSets.lua       Profile → Equipment Manager set
+    ├── ChangeTracker.lua  Unsaved changes hint
+    ├── Keybinds.lua       Key bindings per profile
+    ├── Glyphs.lua         Glyph reminder
     ├── LayoutUI.lua       Profile window (AceGUI-3.0)
     └── MinimapButton.lua  Minimap button
 ```
@@ -108,7 +119,7 @@ New features go into `Core/`. Add new files to the `.toc` below `# TalentBarSave
 |---|---|
 | `TalentedDB` | Talent templates and Talented options |
 | `ActionBarSaverDB` | Action bar profiles and options |
-| `ActionBarSaverDB.bridge` | Template/tree links, gear set links, last applied template per character and talent group, window position, minimap button settings |
+| `ActionBarSaverDB.bridge` | Template/tree links, gear set links, key bindings and glyphs per profile, last applied template per character and talent group, window position, minimap button settings |
 
 ## Compatibility
 
